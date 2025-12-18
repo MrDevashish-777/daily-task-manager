@@ -3,9 +3,23 @@ import { auth } from '../firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import Auth from './components/Auth'
 import TaskManager from './components/TaskManager'
+import { ThemeProvider, useTheme } from './context/ThemeContext'
 import './App.css'
 
-function App() {
+const ThemeToggle = () => {
+  const { isDarkMode, toggleTheme } = useTheme();
+  return (
+    <button 
+      onClick={toggleTheme} 
+      className="btn btn-secondary btn-sm"
+      style={{ marginRight: '1rem' }}
+    >
+      {isDarkMode ? '☀️ Light' : '🌙 Dark'}
+    </button>
+  );
+};
+
+function AppContent() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,18 +45,29 @@ function App() {
     <div className="App">
       <header className="header">
         <h1>Internship Task Manager</h1>
-        {user && (
-          <div className="user-info">
-            <span>{user.email}</span>
-            <button onClick={handleSignOut} className="btn btn-secondary btn-sm">Sign Out</button>
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <ThemeToggle />
+          {user && (
+            <div className="user-info">
+              <span>{user.email}</span>
+              <button onClick={handleSignOut} className="btn btn-secondary btn-sm" style={{ marginLeft: '1rem' }}>Sign Out</button>
+            </div>
+          )}
+        </div>
       </header>
       <main className="app-container">
         {user ? <TaskManager /> : <Auth />}
       </main>
     </div>
   )
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
 }
 
 export default App
