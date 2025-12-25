@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon } from 'lucide-react';
 
 const Calendar = ({ tasks, onAddTask }) => {
@@ -18,7 +18,6 @@ const Calendar = ({ tasks, onAddTask }) => {
     const month = currentDate.getMonth();
     
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
     
@@ -61,28 +60,28 @@ const Calendar = ({ tasks, onAddTask }) => {
     <div className="calendar-view">
       <div className="calendar-header">
         <div className="calendar-nav">
-          <motion.button
+          <Motion.button
             className="nav-btn"
             onClick={() => navigateMonth(-1)}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
           >
             <ChevronLeft size={20} />
-          </motion.button>
+          </Motion.button>
           
           <h2>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
           
-          <motion.button
+          <Motion.button
             className="nav-btn"
             onClick={() => navigateMonth(1)}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
           >
             <ChevronRight size={20} />
-          </motion.button>
+          </Motion.button>
         </div>
         
-        <motion.button
+        <Motion.button
           className="btn btn-primary"
           onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
           whileHover={{ scale: 1.05 }}
@@ -90,7 +89,7 @@ const Calendar = ({ tasks, onAddTask }) => {
         >
           <Plus size={16} />
           Add Task
-        </motion.button>
+        </Motion.button>
       </div>
 
       <div className="calendar-grid">
@@ -105,7 +104,7 @@ const Calendar = ({ tasks, onAddTask }) => {
         <div className="calendar-days">
           <AnimatePresence mode="wait">
             {calendarData.map((day, index) => (
-              <motion.div
+              <Motion.div
                 key={`${day.dateStr}-${index}`}
                 className={`calendar-day ${
                   !day.isCurrentMonth ? 'other-month' : ''
@@ -139,7 +138,7 @@ const Calendar = ({ tasks, onAddTask }) => {
                     </div>
                   </div>
                 )}
-              </motion.div>
+              </Motion.div>
             ))}
           </AnimatePresence>
         </div>
@@ -147,7 +146,7 @@ const Calendar = ({ tasks, onAddTask }) => {
 
       <AnimatePresence>
         {selectedDate && (
-          <motion.div
+          <Motion.div
             className="day-details"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -186,7 +185,7 @@ const Calendar = ({ tasks, onAddTask }) => {
               ) : (
                 <div className="task-list">
                   {selectedDayTasks.map(task => (
-                    <motion.div
+                    <Motion.div
                       key={task.id}
                       className={`task-item ${task.status}`}
                       initial={{ opacity: 0, x: -20 }}
@@ -211,12 +210,12 @@ const Calendar = ({ tasks, onAddTask }) => {
                       <div className={`status-badge ${task.status}`}>
                         {task.status}
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </div>
               )}
             </div>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </div>

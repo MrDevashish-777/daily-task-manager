@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 import { 
   TrendingUp, 
   Clock, 
@@ -20,10 +20,38 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell,
-  LineChart,
-  Line
+  Cell
 } from 'recharts';
+
+const StatCard = ({ title, value, icon, color, trend, subtitle }) => {
+  const Icon = icon;
+  return (
+  <Motion.div
+    className="stat-card"
+    whileHover={{ y: -4 }}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.3 }}
+  >
+    <div className="stat-header">
+      <div className={`stat-icon ${color}`}>
+        <Icon size={24} />
+      </div>
+      {trend && (
+        <div className={`stat-trend ${trend > 0 ? 'positive' : 'negative'}`}>
+          <TrendingUp size={16} />
+          <span>{Math.abs(trend)}%</span>
+        </div>
+      )}
+    </div>
+    <div className="stat-content">
+      <h3>{value}</h3>
+      <p>{title}</p>
+      {subtitle && <small>{subtitle}</small>}
+    </div>
+  </Motion.div>
+);
+};
 
 const Dashboard = ({ tasks, user }) => {
   const stats = useMemo(() => {
@@ -98,33 +126,6 @@ const Dashboard = ({ tasks, user }) => {
     }[priority]
   }));
 
-  const StatCard = ({ title, value, icon: Icon, color, trend, subtitle }) => (
-    <motion.div
-      className="stat-card"
-      whileHover={{ y: -4 }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <div className="stat-header">
-        <div className={`stat-icon ${color}`}>
-          <Icon size={24} />
-        </div>
-        {trend && (
-          <div className={`stat-trend ${trend > 0 ? 'positive' : 'negative'}`}>
-            <TrendingUp size={16} />
-            <span>{Math.abs(trend)}%</span>
-          </div>
-        )}
-      </div>
-      <div className="stat-content">
-        <h3>{value}</h3>
-        <p>{title}</p>
-        {subtitle && <small>{subtitle}</small>}
-      </div>
-    </motion.div>
-  );
-
   return (
     <div className="dashboard">
       <div className="dashboard-header">
@@ -133,13 +134,13 @@ const Dashboard = ({ tasks, user }) => {
           <p>Here's what's happening with your tasks today.</p>
         </div>
         <div className="quick-actions">
-          <motion.button 
+          <Motion.button 
             className="btn btn-primary"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
             + New Task
-          </motion.button>
+          </Motion.button>
         </div>
       </div>
 
@@ -229,7 +230,7 @@ const Dashboard = ({ tasks, user }) => {
           <h3>Recent Activity</h3>
           <div className="activity-list">
             {tasks.slice(0, 5).map(task => (
-              <motion.div
+              <Motion.div
                 key={task.id}
                 className="activity-item"
                 initial={{ opacity: 0, x: -20 }}
@@ -242,7 +243,7 @@ const Dashboard = ({ tasks, user }) => {
                   <p>{task.content}</p>
                   <small>{new Date(task.createdAt).toLocaleString()}</small>
                 </div>
-              </motion.div>
+              </Motion.div>
             ))}
           </div>
         </div>
@@ -254,7 +255,7 @@ const Dashboard = ({ tasks, user }) => {
               .filter(t => t.taskDate === new Date().toISOString().split('T')[0] && t.status === 'pending')
               .slice(0, 4)
               .map(task => (
-                <motion.div
+                <Motion.div
                   key={task.id}
                   className="focus-task"
                   whileHover={{ scale: 1.02 }}
@@ -264,7 +265,7 @@ const Dashboard = ({ tasks, user }) => {
                     <p>{task.content}</p>
                     <small>{task.category}</small>
                   </div>
-                </motion.div>
+                </Motion.div>
               ))}
           </div>
         </div>

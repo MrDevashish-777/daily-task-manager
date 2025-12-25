@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { db, storage, auth } from '../../firebase';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { db, storage } from '../../firebase';
 import {
   collection,
   addDoc,
@@ -12,11 +12,24 @@ import {
   where
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Filter, Calendar, Clock, Tag, Paperclip, Trash2, CheckCircle } from 'lucide-react';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
+import { Plus, Search, Filter, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
+import TaskItem from './TaskItem';
 
-const TaskManager = () => {
+const categories = [
+  'development', 'design', 'testing', 'deployment', 'maintenance',
+  'meetings', 'documentation', 'research', 'bug-fixing', 'planning'
+];
+
+const priorities = [
+  { value: 'low', label: 'Low', color: '#10b981' },
+  { value: 'medium', label: 'Medium', color: '#f59e0b' },
+  { value: 'high', label: 'High', color: '#ef4444' },
+  { value: 'urgent', label: 'Urgent', color: '#dc2626' }
+];
+
+const TaskManager = ({ user }) => {
   const [task, setTask] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('development');
@@ -36,24 +49,16 @@ const TaskManager = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [projects, setProjects] = useState([]);
 
-  const categories = [
-    'development', 'design', 'testing', 'deployment', 'maintenance',
-    'meetings', 'documentation', 'research', 'bug-fixing', 'planning'
-  ];
-
-  const priorities = [
-    { value: 'low', label: 'Low', color: '#10b981' },
-    { value: 'medium', label: 'Medium', color: '#f59e0b' },
-    { value: 'high', label: 'High', color: '#ef4444' },
-    { value: 'urgent', label: 'Urgent', color: '#dc2626' }
-  ];
-
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!user) {
+      setTasks([]);
+      setProjects([]);
+      return;
+    }
 
     const tasksQuery = query(
       collection(db, 'tasks'),
-      where('userId', '==', auth.currentUser.uid),
+      where('userId', '==', user.uid),
       orderBy('createdAt', 'desc')
     );
 
@@ -67,10 +72,12 @@ const TaskManager = () => {
       // Extract unique projects
       const uniqueProjects = [...new Set(taskList.map(t => t.project).filter(p => p))];
       setProjects(uniqueProjects);
+    }, (err) => {
+      console.error('Error fetching tasks:', err);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Filter and search tasks
   const filteredTasks = useMemo(() => {
@@ -94,14 +101,25 @@ const TaskManager = () => {
       toast.error('Please enter a task title');
       return;
     }
+
+    // simple time validation
+    if (startTime && endTime && startTime >= endTime) {
+      toast.error('End time must be after start time');
+      return;
+    }
     
+    if (!user) {
+      toast.error('You must be signed in to add tasks');
+      return;
+    }
+
     setLoading(true);
     const loadingToast = toast.loading('Adding task...');
 
     try {
       let fileUrl = '';
       if (file) {
-        const fileRef = storageRef(storage, `files/${auth.currentUser.uid}/${Date.now()}_${file.name}`);
+        const fileRef = storageRef(storage, `files/${user.uid}/${Date.now()}_${file.name}`);
         await uploadBytes(fileRef, file);
         fileUrl = await getDownloadURL(fileRef);
       }
@@ -120,8 +138,8 @@ const TaskManager = () => {
         status: 'pending',
         createdAt: Date.now(),
         completedAt: null,
-        userId: auth.currentUser.uid,
-        userEmail: auth.currentUser.email
+        userId: user.uid,
+        userEmail: user.email
       };
 
       await addDoc(collection(db, 'tasks'), newTask);
@@ -141,15 +159,15 @@ const TaskManager = () => {
       document.getElementById('fileInput')?.value && (document.getElementById('fileInput').value = '');
       
       toast.success('Task added successfully!', { id: loadingToast });
-    } catch (error) {
-      console.error("Error adding task:", error);
-      toast.error("Error adding task: " + error.message, { id: loadingToast });
+    } catch (err) {
+      console.error("Error adding task:", err);
+      toast.error("Error adding task: " + err.message, { id: loadingToast });
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleStatus = async (taskId, currentStatus) => {
+  const toggleStatus = useCallback(async (taskId, currentStatus) => {
     const newStatus = currentStatus === 'pending' ? 'completed' : 'pending';
     const taskRef = doc(db, 'tasks', taskId);
     
@@ -160,22 +178,24 @@ const TaskManager = () => {
       });
       
       toast.success(`Task marked as ${newStatus}!`);
-    } catch (error) {
+    } catch (err) {
+      console.error('Error toggling status:', err);
       toast.error('Error updating task status');
     }
-  };
+  }, []);
 
-  const deleteTask = async (taskId) => {
+  const deleteTask = useCallback(async (taskId) => {
     if (!window.confirm("Are you sure you want to delete this task?")) return;
     
     try {
       const taskRef = doc(db, 'tasks', taskId);
       await deleteDoc(taskRef);
       toast.success('Task deleted successfully!');
-    } catch (error) {
+    } catch (err) {
+      console.error('Error deleting task:', err);
       toast.error('Error deleting task');
     }
-  };
+  }, []);
 
   return (
     <div className="task-manager">
@@ -185,22 +205,25 @@ const TaskManager = () => {
           <h1>Task Management</h1>
           <p>Organize and track your daily tasks efficiently</p>
         </div>
-        <motion.button
+        <Motion.button
           className="btn btn-primary"
           onClick={() => setShowAddForm(!showAddForm)}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
+          aria-expanded={showAddForm}
+          aria-controls="add-task-form"
         >
           <Plus size={16} />
           {showAddForm ? 'Cancel' : 'Add Task'}
-        </motion.button>
+        </Motion.button>
       </div>
 
       {/* Add Task Form */}
       <AnimatePresence>
         {showAddForm && (
-          <motion.div
+          <Motion.div
             className="card"
+            id="add-task-form"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -333,7 +356,7 @@ const TaskManager = () => {
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                <motion.button
+                <Motion.button
                   type="submit"
                   className="btn btn-primary"
                   disabled={loading}
@@ -341,17 +364,17 @@ const TaskManager = () => {
                   whileTap={{ scale: 0.95 }}
                 >
                   {loading ? 'Adding...' : 'Add Task'}
-                </motion.button>
-                <button
+                </Motion.button>
+                <Motion.button
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setShowAddForm(false)}
                 >
                   Cancel
-                </button>
+                </Motion.button>
               </div>
             </form>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
 
@@ -419,7 +442,7 @@ const TaskManager = () => {
       <div className="task-list">
         <AnimatePresence>
           {filteredTasks.length === 0 ? (
-            <motion.div
+            <Motion.div
               className="empty-state"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -433,7 +456,7 @@ const TaskManager = () => {
                   : 'Start by adding your first task to get organized!'}
               </p>
               {!showAddForm && (
-                <motion.button
+                <Motion.button
                   className="btn btn-primary"
                   onClick={() => setShowAddForm(true)}
                   whileHover={{ scale: 1.05 }}
@@ -441,136 +464,18 @@ const TaskManager = () => {
                 >
                   <Plus size={16} />
                   Add Your First Task
-                </motion.button>
+                </Motion.button>
               )}
-            </motion.div>
+            </Motion.div>
           ) : (
             filteredTasks.map((t) => (
-              <motion.div
-                key={t.id}
-                className={`task-item ${t.status === 'completed' ? 'completed' : ''}`}
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="task-content">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                    <h4 className="task-text">{t.content}</h4>
-                    <span
-                      className="priority-badge"
-                      style={{
-                        backgroundColor: priorities.find(p => p.value === t.priority)?.color || '#64748b',
-                        color: 'white',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: 'var(--radius-sm)',
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        textTransform: 'uppercase'
-                      }}
-                    >
-                      {t.priority}
-                    </span>
-                  </div>
-
-                  {t.description && (
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
-                      {t.description}
-                    </p>
-                  )}
-
-                  <div className="task-meta">
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <Calendar size={12} />
-                        {new Date(t.taskDate).toLocaleDateString()}
-                      </span>
-                      <span>{t.category}</span>
-                      {t.project && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          📁 {t.project}
-                        </span>
-                      )}
-                      {t.startTime && t.endTime && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <Clock size={12} />
-                          {t.startTime} - {t.endTime}
-                        </span>
-                      )}
-                    </div>
-                    
-                    {t.tags && t.tags.length > 0 && (
-                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                        {t.tags.map((tag, index) => (
-                          <span
-                            key={index}
-                            style={{
-                              backgroundColor: 'var(--primary-100)',
-                              color: 'var(--primary-700)',
-                              padding: '0.125rem 0.375rem',
-                              borderRadius: 'var(--radius-sm)',
-                              fontSize: '0.625rem',
-                              fontWeight: '500',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.125rem'
-                            }}
-                          >
-                            <Tag size={10} />
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {t.fileUrl && (
-                      <a
-                        href={t.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="attachment-link"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          marginTop: '0.5rem',
-                          color: 'var(--primary-color)',
-                          textDecoration: 'none',
-                          fontSize: '0.75rem',
-                          fontWeight: '500'
-                        }}
-                      >
-                        <Paperclip size={12} />
-                        View Attachment
-                      </a>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="task-actions">
-                  <motion.button
-                    onClick={() => toggleStatus(t.id, t.status)}
-                    className={`btn btn-sm ${
-                      t.status === 'pending' ? 'btn-primary' : 'btn-secondary'
-                    }`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <CheckCircle size={14} />
-                    {t.status === 'pending' ? 'Complete' : 'Completed'}
-                  </motion.button>
-                  <motion.button
-                    onClick={() => deleteTask(t.id)}
-                    className="btn btn-danger btn-sm"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Trash2 size={14} />
-                    Delete
-                  </motion.button>
-                </div>
-              </motion.div>
+              <TaskItem 
+                key={t.id} 
+                task={t} 
+                toggleStatus={toggleStatus} 
+                deleteTask={deleteTask} 
+                priorities={priorities}
+              />
             ))
           )}
         </AnimatePresence>
@@ -579,4 +484,4 @@ const TaskManager = () => {
   );
 };
 
-export default TaskManager;
+export default React.memo(TaskManager);
