@@ -58,15 +58,14 @@ const TaskManager = ({ user }) => {
 
     const tasksQuery = query(
       collection(db, 'tasks'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(tasksQuery, (snapshot) => {
       const taskList = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })).sort((a, b) => b.createdAt - a.createdAt);
       setTasks(taskList);
 
       // Extract unique projects

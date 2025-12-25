@@ -53,7 +53,7 @@ const StatCard = ({ title, value, icon, color, trend, subtitle }) => {
 );
 };
 
-const Dashboard = ({ tasks, user }) => {
+const Dashboard = ({ tasks, user, userProfile }) => {
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     const thisWeek = new Date();
@@ -130,7 +130,7 @@ const Dashboard = ({ tasks, user }) => {
     <div className="dashboard">
       <div className="dashboard-header">
         <div>
-          <h1>Welcome back, {user?.email?.split('@')[0]}!</h1>
+          <h1>Welcome back, {userProfile?.displayName || user?.email?.split('@')[0]}!</h1>
           <p>Here's what's happening with your tasks today.</p>
         </div>
         <div className="quick-actions">

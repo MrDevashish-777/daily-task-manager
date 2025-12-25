@@ -1,34 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Mail, Shield, MoreVertical, Plus } from 'lucide-react';
 import { motion as Motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { db } from '../../firebase';
+import { collection, onSnapshot, query, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const Team = ({ user }) => {
-  const [members, setMembers] = useState([
-    { id: 1, name: user?.displayName || user?.email?.split('@')[0] || 'You', email: user?.email, role: 'Owner', avatar: null },
-    { id: 2, name: 'Alex Johnson', email: 'alex@example.com', role: 'Editor', avatar: 'https://ui-avatars.com/api/?name=Alex+Johnson&background=random' },
-    { id: 3, name: 'Sarah Williams', email: 'sarah@example.com', role: 'Viewer', avatar: 'https://ui-avatars.com/api/?name=Sarah+Williams&background=random' },
-  ]);
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const memberList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMembers(memberList);
+      setLoading(false);
+    }, (err) => {
+      console.error("Error fetching team:", err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
 
-  const handleInvite = (e) => {
+  const handleInvite = async (e) => {
     e.preventDefault();
     if (!inviteEmail) return;
     
-    // Mock invite
-    toast.success(`Invitation sent to ${inviteEmail}`);
-    setMembers([...members, {
-      id: Date.now(),
-      name: inviteEmail.split('@')[0],
-      email: inviteEmail,
-      role: 'Viewer',
-      avatar: `https://ui-avatars.com/api/?name=${inviteEmail}&background=random`
-    }]);
-    setInviteEmail('');
-    setShowInvite(false);
+    const inviteToast = toast.loading(`Sending invitation to ${inviteEmail}...`);
+    try {
+      // In a real app, this would send an email or create an invite record
+      // For this demo, we'll just create a placeholder user in Firestore
+      await addDoc(collection(db, 'users'), {
+        email: inviteEmail,
+        displayName: inviteEmail.split('@')[0],
+        role: 'Viewer',
+        createdAt: Date.now(),
+        isPlaceholder: true
+      });
+      
+      toast.success(`Invitation sent to ${inviteEmail}`, { id: inviteToast });
+      setInviteEmail('');
+      setShowInvite(false);
+    } catch (err) {
+      console.error("Error inviting member:", err);
+      toast.error("Failed to send invitation", { id: inviteToast });
+    }
   };
+
+  if (loading) return <div className="card">Loading team members...</div>;
 
   return (
     <div className="card">
@@ -87,14 +113,14 @@ const Team = ({ user }) => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               {member.avatar ? (
-                <img src={member.avatar} alt={member.name} style={{ width: 40, height: 40, borderRadius: '50%' }} />
+                <img src={member.avatar} alt={member.displayName} style={{ width: 40, height: 40, borderRadius: '50%' }} />
               ) : (
                 <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--primary-color)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {member.name.charAt(0).toUpperCase()}
+                  {(member.displayName || member.email || 'U').charAt(0).toUpperCase()}
                 </div>
               )}
               <div>
-                <h4 style={{ margin: 0 }}>{member.name} {member.id === 1 && '(You)'}</h4>
+                <h4 style={{ margin: 0 }}>{member.displayName || member.email?.split('@')[0]} {member.uid === user.uid && '(You)'}</h4>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                   <Mail size={12} />
                   {member.email}

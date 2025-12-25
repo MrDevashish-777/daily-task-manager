@@ -3,27 +3,40 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { Clock, Play, Pause, RotateCcw, Save, History } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { db } from '../../firebase';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const TimeTracking = ({ tasks = [], user }) => {
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
 
   useEffect(() => {
-    // Load logs from local storage
-    const savedLogs = localStorage.getItem(`timeLogs_${user?.uid}`);
-    if (savedLogs) {
-      setLogs(JSON.parse(savedLogs));
-    }
-  }, [user]);
+    if (!user) return;
 
-  const saveLogs = (newLogs) => {
-    setLogs(newLogs);
-    localStorage.setItem(`timeLogs_${user?.uid}`, JSON.stringify(newLogs));
-  };
+    const q = query(
+      collection(db, 'timeLogs'),
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const logList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })).sort((a, b) => b.date - a.date);
+      setLogs(logList);
+      setLoading(false);
+    }, (err) => {
+      console.error("Error fetching time logs:", err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   const start = () => {
     if (!selectedTaskId) {
@@ -50,26 +63,31 @@ const TimeTracking = ({ tasks = [], user }) => {
     setElapsed(0);
   };
 
-  const saveSession = () => {
+  const saveSession = async () => {
     if (elapsed < 1000) {
       toast.error('Time session too short to save');
       return;
     }
     
-    const task = tasks.find(t => t.id === selectedTaskId);
-    const newLog = {
-      id: Date.now(),
-      taskId: selectedTaskId,
-      taskTitle: task ? task.content : 'Unknown Task',
-      duration: elapsed,
-      date: new Date().toISOString()
-    };
-    
-    const newLogs = [newLog, ...logs];
-    saveLogs(newLogs);
-    
-    reset();
-    toast.success('Time log saved!');
+    if (!user) return;
+
+    const savingToast = toast.loading('Saving time log...');
+    try {
+      const task = tasks.find(t => t.id === selectedTaskId);
+      await addDoc(collection(db, 'timeLogs'), {
+        userId: user.uid,
+        taskId: selectedTaskId,
+        taskTitle: task ? task.content : 'Unknown Task',
+        duration: elapsed,
+        date: Date.now()
+      });
+      
+      reset();
+      toast.success('Time log saved to Firestore!', { id: savingToast });
+    } catch (err) {
+      console.error("Error saving time log:", err);
+      toast.error('Failed to save time log', { id: savingToast });
+    }
   };
 
   const formatTime = (ms) => {
@@ -78,6 +96,8 @@ const TimeTracking = ({ tasks = [], user }) => {
     const hours = Math.floor((ms / (1000 * 60 * 60)));
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
+
+  if (loading) return <div className="card">Loading time tracking data...</div>;
 
   return (
     <div className="time-tracking">

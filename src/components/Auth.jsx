@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { auth } from '../../firebase';
+import { auth, db } from '../../firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -17,7 +18,22 @@ const Auth = () => {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Create user document in Firestore
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          email: user.email,
+          createdAt: Date.now(),
+          displayName: email.split('@')[0],
+          role: 'Owner',
+          settings: {
+            notifications: true,
+            emailDigest: false,
+            theme: 'light'
+          }
+        });
       }
     } catch (err) {
       setError(err.message);

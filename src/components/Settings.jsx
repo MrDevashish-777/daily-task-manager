@@ -1,20 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Bell, Moon, Sun, Download, User, Save } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { motion as Motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { db } from '../../firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const Settings = ({ user }) => {
   const { isDarkMode, toggleTheme } = useTheme();
   const [displayName, setDisplayName] = useState(user?.displayName || user?.email?.split('@')[0] || '');
   const [notifications, setNotifications] = useState(true);
   const [emailDigest, setEmailDigest] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserSettings = async () => {
+      if (!user) return;
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setDisplayName(data.displayName || user?.email?.split('@')[0] || '');
+          if (data.settings) {
+            setNotifications(data.settings.notifications ?? true);
+            setEmailDigest(data.settings.emailDigest ?? false);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching settings:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserSettings();
+  }, [user]);
   
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    // Save settings to backend or localStorage (stub)
-    localStorage.setItem('userSettings', JSON.stringify({ displayName, notifications, emailDigest }));
-    toast.success('Settings saved successfully');
+    if (!user) return;
+
+    const savingToast = toast.loading('Saving settings...');
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        displayName,
+        settings: {
+          notifications,
+          emailDigest,
+          theme: isDarkMode ? 'dark' : 'light'
+        }
+      });
+      toast.success('Settings saved to Firestore', { id: savingToast });
+    } catch (err) {
+      console.error("Error saving settings:", err);
+      toast.error('Failed to save settings', { id: savingToast });
+    }
   };
 
   const handleExport = () => {
@@ -35,6 +75,8 @@ const Settings = ({ user }) => {
     URL.revokeObjectURL(url);
     toast.success('Data export started');
   };
+
+  if (loading) return <div className="card">Loading settings...</div>;
 
   return (
     <div className="settings-page">

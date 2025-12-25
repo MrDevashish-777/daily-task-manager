@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Suspense } from 'react'
 import { auth, db } from '../firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore'
+import { collection, query, where, orderBy, onSnapshot, doc } from 'firebase/firestore'
 import { Toaster } from 'react-hot-toast'
 import { Sun, Moon, LogOut, User } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -41,6 +41,7 @@ const ThemeToggle = () => {
 
 function AppContent() {
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 768);
@@ -65,11 +66,25 @@ function AppContent() {
       setUser(currentUser);
       if (!currentUser) {
         setTasks([]);
+        setUserProfile(null);
       }
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
+
+  // Subscribe to user profile
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        setUserProfile(snapshot.data());
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   useEffect(() => {
     document.body.className = isDarkMode ? 'dark-mode' : '';
@@ -81,15 +96,14 @@ function AppContent() {
 
     const tasksQuery = query(
       collection(db, 'tasks'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(tasksQuery, (snapshot) => {
       const taskList = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })).sort((a, b) => b.createdAt - a.createdAt);
       setTasks(taskList);
     }, (err) => {
       console.error('Error fetching tasks:', err);
@@ -127,7 +141,7 @@ function AppContent() {
   const renderContent = () => {
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard tasks={tasks} user={user} />;
+        return <Dashboard tasks={tasks} user={user} userProfile={userProfile} />;
       case 'tasks':
         return <TaskManager user={user} />;
       case 'calendar':
@@ -137,7 +151,7 @@ function AppContent() {
       case 'team':
         return (
           <Suspense fallback={<div className="card">Loading Team...</div>}>
-            <Team tasks={tasks} user={user} />
+            <Team tasks={tasks} user={user} userProfile={userProfile} />
           </Suspense>
         );
       case 'timetrack':
@@ -155,11 +169,11 @@ function AppContent() {
       case 'settings':
         return (
           <Suspense fallback={<div className="card">Loading Settings...</div>}>
-            <Settings user={user} />
+            <Settings user={user} userProfile={userProfile} />
           </Suspense>
         );
       default:
-        return <Dashboard tasks={tasks} user={user} />;
+        return <Dashboard tasks={tasks} user={user} userProfile={userProfile} />;
     }
   };
 
@@ -184,7 +198,7 @@ function AppContent() {
             <div className="user-menu">
               <div className="user-info">
                 <User size={16} />
-                <span>{user.email?.split('@')[0]}</span>
+                <span>{userProfile?.displayName || user.email?.split('@')[0]}</span>
               </div>
               
               <motion.button 
