@@ -13,6 +13,8 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Search, Filter, Calendar, Clock, Tag, Paperclip, Trash2, CheckCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const TaskManager = () => {
   const [task, setTask] = useState('');
@@ -31,12 +33,12 @@ const TaskManager = () => {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDate, setFilterDate] = useState('');
-  const [view, setView] = useState('tasks'); // 'tasks' or 'dashboard'
+  const [showAddForm, setShowAddForm] = useState(false);
   const [projects, setProjects] = useState([]);
 
   const categories = [
     'development', 'design', 'testing', 'deployment', 'maintenance',
-    'meetings', 'documentation', 'research', 'bug-fixing', 'other'
+    'meetings', 'documentation', 'research', 'bug-fixing', 'planning'
   ];
 
   const priorities = [
@@ -75,7 +77,7 @@ const TaskManager = () => {
     return tasks.filter(task => {
       const matchesSearch = task.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          task.tags?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          task.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           task.project?.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesCategory = filterCategory === 'all' || task.category === filterCategory;
@@ -86,34 +88,15 @@ const TaskManager = () => {
     });
   }, [tasks, searchTerm, filterCategory, filterStatus, filterDate]);
 
-  // Calculate statistics for dashboard
-  const stats = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const todayTasks = tasks.filter(t => t.taskDate === today);
-    const completedToday = todayTasks.filter(t => t.status === 'completed').length;
-    const totalTimeToday = todayTasks.reduce((acc, t) => {
-      if (t.startTime && t.endTime) {
-        const start = new Date(`${t.taskDate}T${t.startTime}`);
-        const end = new Date(`${t.taskDate}T${t.endTime}`);
-        return acc + (end - start) / (1000 * 60 * 60); // hours
-      }
-      return acc;
-    }, 0);
-
-    return {
-      totalTasks: tasks.length,
-      completedTasks: tasks.filter(t => t.status === 'completed').length,
-      pendingTasks: tasks.filter(t => t.status === 'pending').length,
-      todayTasks: todayTasks.length,
-      completedToday,
-      totalTimeToday: Math.round(totalTimeToday * 10) / 10
-    };
-  }, [tasks]);
-
   const handleAddTask = async (e) => {
     e.preventDefault();
-    if (!task.trim()) return;
+    if (!task.trim()) {
+      toast.error('Please enter a task title');
+      return;
+    }
+    
     setLoading(true);
+    const loadingToast = toast.loading('Adding task...');
 
     try {
       let fileUrl = '';
@@ -154,10 +137,13 @@ const TaskManager = () => {
       setEndTime('');
       setTaskDate(new Date().toISOString().split('T')[0]);
       setFile(null);
-      document.getElementById('fileInput').value = '';
+      setShowAddForm(false);
+      document.getElementById('fileInput')?.value && (document.getElementById('fileInput').value = '');
+      
+      toast.success('Task added successfully!', { id: loadingToast });
     } catch (error) {
       console.error("Error adding task:", error);
-      alert("Error adding task: " + error.message);
+      toast.error("Error adding task: " + error.message, { id: loadingToast });
     } finally {
       setLoading(false);
     }
@@ -166,122 +152,67 @@ const TaskManager = () => {
   const toggleStatus = async (taskId, currentStatus) => {
     const newStatus = currentStatus === 'pending' ? 'completed' : 'pending';
     const taskRef = doc(db, 'tasks', taskId);
-    await updateDoc(taskRef, {
-      status: newStatus,
-      completedAt: newStatus === 'completed' ? Date.now() : null
-    });
+    
+    try {
+      await updateDoc(taskRef, {
+        status: newStatus,
+        completedAt: newStatus === 'completed' ? Date.now() : null
+      });
+      
+      toast.success(`Task marked as ${newStatus}!`);
+    } catch (error) {
+      toast.error('Error updating task status');
+    }
   };
 
   const deleteTask = async (taskId) => {
-      if(!window.confirm("Are you sure you want to delete this task?")) return;
+    if (!window.confirm("Are you sure you want to delete this task?")) return;
+    
+    try {
       const taskRef = doc(db, 'tasks', taskId);
       await deleteDoc(taskRef);
-  }
+      toast.success('Task deleted successfully!');
+    } catch (error) {
+      toast.error('Error deleting task');
+    }
+  };
 
   return (
     <div className="task-manager">
-      {/* Navigation */}
-      <div className="view-toggle" style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-        <button
-          onClick={() => setView('dashboard')}
-          className={`btn ${view === 'dashboard' ? 'btn-primary' : 'btn-secondary'}`}
+      {/* Header */}
+      <div className="task-manager-header">
+        <div>
+          <h1>Task Management</h1>
+          <p>Organize and track your daily tasks efficiently</p>
+        </div>
+        <motion.button
+          className="btn btn-primary"
+          onClick={() => setShowAddForm(!showAddForm)}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          📊 Dashboard
-        </button>
-        <button
-          onClick={() => setView('tasks')}
-          className={`btn ${view === 'tasks' ? 'btn-primary' : 'btn-secondary'}`}
-        >
-          📝 Tasks
-        </button>
+          <Plus size={16} />
+          {showAddForm ? 'Cancel' : 'Add Task'}
+        </motion.button>
       </div>
 
-      {view === 'dashboard' ? (
-        /* Dashboard View */
-        <motion.div
-          className="dashboard"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="stats-grid" style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '1rem',
-            marginBottom: '2rem'
-          }}>
-            <div className="stat-card card">
-              <h3>Total Tasks</h3>
-              <p className="stat-number">{stats.totalTasks}</p>
-            </div>
-            <div className="stat-card card">
-              <h3>Completed</h3>
-              <p className="stat-number" style={{ color: 'var(--success-color)' }}>{stats.completedTasks}</p>
-            </div>
-            <div className="stat-card card">
-              <h3>Pending</h3>
-              <p className="stat-number" style={{ color: 'var(--secondary-color)' }}>{stats.pendingTasks}</p>
-            </div>
-            <div className="stat-card card">
-              <h3>Today's Tasks</h3>
-              <p className="stat-number">{stats.todayTasks}</p>
-            </div>
-            <div className="stat-card card">
-              <h3>Completed Today</h3>
-              <p className="stat-number" style={{ color: 'var(--success-color)' }}>{stats.completedToday}</p>
-            </div>
-            <div className="stat-card card">
-              <h3>Hours Today</h3>
-              <p className="stat-number">{stats.totalTimeToday}h</p>
-            </div>
-          </div>
-
-          {/* Recent Tasks */}
-          <div className="card">
-            <h3>Recent Tasks</h3>
-            <div className="recent-tasks">
-              {tasks.slice(0, 5).map(task => (
-                <div key={task.id} className="recent-task-item" style={{
-                  padding: '0.5rem',
-                  borderBottom: '1px solid var(--border-color)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <div>
-                    <p style={{ margin: 0, fontWeight: '500' }}>{task.content}</p>
-                    <small style={{ color: 'var(--text-secondary)' }}>
-                      👤 {task.userEmail} • {task.taskDate} • {task.category}
-                    </small>
-                  </div>
-                  <span className={`status-badge ${task.status}`} style={{
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: 'var(--radius)',
-                    fontSize: '0.75rem',
-                    backgroundColor: task.status === 'completed' ? 'var(--success-color)' : 'var(--secondary-color)',
-                    color: 'white'
-                  }}>
-                    {task.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      ) : (
-        /* Tasks View */
-        <>
-          {/* Add Task Form */}
+      {/* Add Task Form */}
+      <AnimatePresence>
+        {showAddForm && (
           <motion.div
             className="card"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
           >
-            <h2 style={{ marginBottom: '1.5rem', fontSize: '1.25rem', fontWeight: '600' }}>Add New Task</h2>
+            <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Plus size={20} />
+              Add New Task
+            </h3>
             <form onSubmit={handleAddTask} className="task-form">
-              <div className="form-grid" style={{ display: 'grid', gap: '1rem' }}>
-                <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-grid">
+                <div className="form-row">
                   <div>
                     <label className="input-label">Task Title *</label>
                     <input
@@ -289,7 +220,7 @@ const TaskManager = () => {
                       className="input-field"
                       value={task}
                       onChange={(e) => setTask(e.target.value)}
-                      placeholder="What did you work on?"
+                      placeholder="What needs to be done?"
                       required
                     />
                   </div>
@@ -316,7 +247,7 @@ const TaskManager = () => {
                   />
                 </div>
 
-                <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                <div className="form-row">
                   <div>
                     <label className="input-label">Category</label>
                     <select
@@ -357,7 +288,7 @@ const TaskManager = () => {
                   </div>
                 </div>
 
-                <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-row">
                   <div>
                     <label className="input-label">Start Time</label>
                     <input
@@ -378,194 +309,272 @@ const TaskManager = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="input-label">Tags (comma-separated)</label>
-                  <input
-                    type="text"
-                    className="input-field"
-                    value={tags}
-                    onChange={(e) => setTags(e.target.value)}
-                    placeholder="react, api, bug-fix"
-                  />
-                </div>
-
-                <div>
-                  <label className="input-label">Attachment</label>
-                  <input
-                    id="fileInput"
-                    type="file"
-                    onChange={(e) => setFile(e.target.files[0])}
-                    style={{ fontSize: '0.875rem' }}
-                  />
+                <div className="form-row">
+                  <div>
+                    <label className="input-label">Tags (comma-separated)</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      value={tags}
+                      onChange={(e) => setTags(e.target.value)}
+                      placeholder="react, api, bug-fix"
+                    />
+                  </div>
+                  <div>
+                    <label className="input-label">Attachment</label>
+                    <input
+                      id="fileInput"
+                      type="file"
+                      className="input-field"
+                      onChange={(e) => setFile(e.target.files[0])}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <motion.button
-                type="submit"
-                className="btn btn-primary"
-                disabled={loading}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                style={{ marginTop: '1rem' }}
-              >
-                {loading ? 'Adding...' : 'Add Task'}
-              </motion.button>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                <motion.button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={loading}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {loading ? 'Adding...' : 'Add Task'}
+                </motion.button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowAddForm(false)}
+                >
+                  Cancel
+                </button>
+              </div>
             </form>
           </motion.div>
+        )}
+      </AnimatePresence>
 
-          {/* Filters and Search */}
-          <div className="filters card" style={{ marginBottom: '2rem' }}>
-            <div className="filter-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'end' }}>
-              <div>
-                <label className="input-label">Search</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search tasks..."
-                />
-              </div>
-              <div>
-                <label className="input-label">Category</label>
-                <select
-                  className="input-field"
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                >
-                  <option value="all">All Categories</option>
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="input-label">Status</label>
-                <select
-                  className="input-field"
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                >
-                  <option value="all">All Status</option>
-                  <option value="pending">Pending</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-              <div>
-                <label className="input-label">Date</label>
-                <input
-                  type="date"
-                  className="input-field"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                />
-              </div>
-            </div>
+      {/* Filters */}
+      <div className="card">
+        <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Filter size={20} />
+          Filters & Search
+        </h3>
+        <div className="filter-grid">
+          <div>
+            <label className="input-label">
+              <Search size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
+              Search
+            </label>
+            <input
+              type="text"
+              className="input-field"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search tasks, projects, tags..."
+            />
           </div>
+          <div>
+            <label className="input-label">Category</label>
+            <select
+              className="input-field"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+            >
+              <option value="all">All Categories</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="input-label">Status</label>
+            <select
+              className="input-field"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div>
+            <label className="input-label">
+              <Calendar size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
+              Date
+            </label>
+            <input
+              type="date"
+              className="input-field"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
-          {/* Tasks List */}
-          <motion.div
-            className="task-list"
-            layout
-          >
-            <AnimatePresence>
-              {filteredTasks.length === 0 && (
-                <motion.div
-                  className="empty-state"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+      {/* Tasks List */}
+      <div className="task-list">
+        <AnimatePresence>
+          {filteredTasks.length === 0 ? (
+            <motion.div
+              className="empty-state"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📝</div>
+              <h3>No tasks found</h3>
+              <p>
+                {searchTerm || filterCategory !== 'all' || filterStatus !== 'all' || filterDate
+                  ? 'No tasks match your current filters. Try adjusting your search criteria.'
+                  : 'Start by adding your first task to get organized!'}
+              </p>
+              {!showAddForm && (
+                <motion.button
+                  className="btn btn-primary"
+                  onClick={() => setShowAddForm(true)}
+                  whileHover={{ scale: 1.05 }}
+                  style={{ marginTop: '1rem' }}
                 >
-                  <p>{searchTerm || filterCategory !== 'all' || filterStatus !== 'all' || filterDate ?
-                    'No tasks match your filters.' : 'No tasks found. Start by adding your first task above!'}</p>
-                </motion.div>
+                  <Plus size={16} />
+                  Add Your First Task
+                </motion.button>
               )}
-              {filteredTasks.map((t) => (
-                <motion.div
-                  key={t.id}
-                  className={`task-item ${t.status === 'completed' ? 'completed' : ''}`}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="task-content">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                      <p className="task-text">{t.content}</p>
-                      <span style={{
+            </motion.div>
+          ) : (
+            filteredTasks.map((t) => (
+              <motion.div
+                key={t.id}
+                className={`task-item ${t.status === 'completed' ? 'completed' : ''}`}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="task-content">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                    <h4 className="task-text">{t.content}</h4>
+                    <span
+                      className="priority-badge"
+                      style={{
                         backgroundColor: priorities.find(p => p.value === t.priority)?.color || '#64748b',
                         color: 'white',
-                        padding: '0.125rem 0.5rem',
-                        borderRadius: 'var(--radius)',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: 'var(--radius-sm)',
                         fontSize: '0.75rem',
-                        fontWeight: '500'
-                      }}>
-                        {t.priority}
+                        fontWeight: '600',
+                        textTransform: 'uppercase'
+                      }}
+                    >
+                      {t.priority}
+                    </span>
+                  </div>
+
+                  {t.description && (
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+                      {t.description}
+                    </p>
+                  )}
+
+                  <div className="task-meta">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <Calendar size={12} />
+                        {new Date(t.taskDate).toLocaleDateString()}
                       </span>
-                    </div>
-
-                    {t.description && (
-                      <p style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
-                        {t.description}
-                      </p>
-                    )}
-
-                    <div className="task-meta">
-                      <span>👤 {t.userEmail}</span>
-                      <span>{new Date(t.createdAt).toLocaleString()}</span>
-                      <span>{t.taskDate}</span>
                       <span>{t.category}</span>
-                      {t.project && <span>Project: {t.project}</span>}
+                      {t.project && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          📁 {t.project}
+                        </span>
+                      )}
                       {t.startTime && t.endTime && (
-                        <span>{t.startTime} - {t.endTime}</span>
-                      )}
-                      {t.tags && t.tags.length > 0 && (
-                        <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                          {t.tags.map((tag, index) => (
-                            <span key={index} style={{
-                              backgroundColor: 'var(--background-color)',
-                              color: 'var(--text-secondary)',
-                              padding: '0.125rem 0.25rem',
-                              borderRadius: 'var(--radius)',
-                              fontSize: '0.75rem'
-                            }}>
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {t.fileUrl && (
-                        <a href={t.fileUrl} target="_blank" rel="noopener noreferrer" className="attachment-link">
-                          📎 Attachment
-                        </a>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Clock size={12} />
+                          {t.startTime} - {t.endTime}
+                        </span>
                       )}
                     </div>
+                    
+                    {t.tags && t.tags.length > 0 && (
+                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                        {t.tags.map((tag, index) => (
+                          <span
+                            key={index}
+                            style={{
+                              backgroundColor: 'var(--primary-100)',
+                              color: 'var(--primary-700)',
+                              padding: '0.125rem 0.375rem',
+                              borderRadius: 'var(--radius-sm)',
+                              fontSize: '0.625rem',
+                              fontWeight: '500',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.125rem'
+                            }}
+                          >
+                            <Tag size={10} />
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {t.fileUrl && (
+                      <a
+                        href={t.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="attachment-link"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          marginTop: '0.5rem',
+                          color: 'var(--primary-color)',
+                          textDecoration: 'none',
+                          fontSize: '0.75rem',
+                          fontWeight: '500'
+                        }}
+                      >
+                        <Paperclip size={12} />
+                        View Attachment
+                      </a>
+                    )}
                   </div>
-                  <div className="task-actions">
-                    <motion.button
-                      onClick={() => toggleStatus(t.id, t.status)}
-                      className={`btn btn-sm ${t.status === 'pending' ? 'btn-secondary' : 'btn-primary'}`}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      {t.status === 'pending' ? 'Mark Done' : 'Completed'}
-                    </motion.button>
-                    <motion.button
-                      onClick={() => deleteTask(t.id)}
-                      className="btn btn-danger btn-sm"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      Delete
-                    </motion.button>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </motion.div>
-        </>
-      )}
+                </div>
+                
+                <div className="task-actions">
+                  <motion.button
+                    onClick={() => toggleStatus(t.id, t.status)}
+                    className={`btn btn-sm ${
+                      t.status === 'pending' ? 'btn-primary' : 'btn-secondary'
+                    }`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <CheckCircle size={14} />
+                    {t.status === 'pending' ? 'Complete' : 'Completed'}
+                  </motion.button>
+                  <motion.button
+                    onClick={() => deleteTask(t.id)}
+                    className="btn btn-danger btn-sm"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </motion.button>
+                </div>
+              </motion.div>
+            ))
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };
