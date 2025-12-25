@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Filter, Calendar, Clock, Tag, Paperclip, Trash2, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+
 const TaskManager = () => {
   const [task, setTask] = useState('');
   const [description, setDescription] = useState('');
@@ -141,9 +142,9 @@ const TaskManager = () => {
       document.getElementById('fileInput')?.value && (document.getElementById('fileInput').value = '');
       
       toast.success('Task added successfully!', { id: loadingToast });
-    } catch (error) {
-      console.error("Error adding task:", error);
-      toast.error("Error adding task: " + error.message, { id: loadingToast });
+    } catch (err) {
+      console.error("Error adding task:", err);
+      toast.error("Error adding task: " + err.message, { id: loadingToast });
     } finally {
       setLoading(false);
     }
@@ -160,7 +161,7 @@ const TaskManager = () => {
       });
       
       toast.success(`Task marked as ${newStatus}!`);
-    } catch (error) {
+    } catch {
       toast.error('Error updating task status');
     }
   };
@@ -172,7 +173,7 @@ const TaskManager = () => {
       const taskRef = doc(db, 'tasks', taskId);
       await deleteDoc(taskRef);
       toast.success('Task deleted successfully!');
-    } catch (error) {
+    } catch {
       toast.error('Error deleting task');
     }
   };

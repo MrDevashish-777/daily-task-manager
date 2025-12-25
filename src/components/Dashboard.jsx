@@ -20,10 +20,35 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell,
-  LineChart,
-  Line
+  Cell
 } from 'recharts';
+
+const StatCard = ({ title, value, icon: IconComponent, color, trend, subtitle }) => (
+  <motion.div
+    className="stat-card"
+    whileHover={{ y: -4 }}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.3 }}
+  >
+    <div className="stat-header">
+      <div className={`stat-icon ${color}`}>
+        <IconComponent size={24} />
+      </div>
+      {trend && (
+        <div className={`stat-trend ${trend > 0 ? 'positive' : 'negative'}`}>
+          <TrendingUp size={16} />
+          <span>{Math.abs(trend)}%</span>
+        </div>
+      )}
+    </div>
+    <div className="stat-content">
+      <h3>{value}</h3>
+      <p>{title}</p>
+      {subtitle && <small>{subtitle}</small>}
+    </div>
+  </motion.div>
+);
 
 const Dashboard = ({ tasks, user }) => {
   const stats = useMemo(() => {
@@ -97,33 +122,6 @@ const Dashboard = ({ tasks, user }) => {
       urgent: '#dc2626'
     }[priority]
   }));
-
-  const StatCard = ({ title, value, icon: Icon, color, trend, subtitle }) => (
-    <motion.div
-      className="stat-card"
-      whileHover={{ y: -4 }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <div className="stat-header">
-        <div className={`stat-icon ${color}`}>
-          <Icon size={24} />
-        </div>
-        {trend && (
-          <div className={`stat-trend ${trend > 0 ? 'positive' : 'negative'}`}>
-            <TrendingUp size={16} />
-            <span>{Math.abs(trend)}%</span>
-          </div>
-        )}
-      </div>
-      <div className="stat-content">
-        <h3>{value}</h3>
-        <p>{title}</p>
-        {subtitle && <small>{subtitle}</small>}
-      </div>
-    </motion.div>
-  );
 
   return (
     <div className="dashboard">

@@ -3,15 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FolderOpen, 
   Plus, 
-  MoreVertical, 
-  Calendar, 
-  Clock, 
-  Users,
+  MoreVertical,
   Target,
   TrendingUp
 } from 'lucide-react';
 
-const Projects = ({ tasks, onAddTask }) => {
+const Projects = ({ tasks }) => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showNewProject, setShowNewProject] = useState(false);
 
@@ -152,7 +149,7 @@ const Projects = ({ tasks, onAddTask }) => {
 
       <div className="projects-grid">
         <AnimatePresence>
-          {projectsData.map((project, index) => (
+          {projectsData.map((project) => (
             <ProjectCard key={project.name} project={project} />
           ))}
         </AnimatePresence>
