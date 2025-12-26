@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1>✅ Task Manager Web App</h1>
+<h1>Karma-Manager</h1>
 
 <h3>🚀 A modern, fast & beautiful task management application</h3>
 
@@ -28,7 +28,7 @@
 
 <h3>🎥 Demo Preview</h3>
 
-![Preview Image](ChatGPT Image Dec 26, 2025, 12_33_33 PM.png)
+![Preview Image](<ChatGPT Image Dec 26, 2025, 12_33_33 PM-1.png>)
 
 ---
 
