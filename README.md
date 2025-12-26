@@ -184,9 +184,8 @@ firebase deploy
 4️⃣ Open a pull request
 
 <h2>📄 License</h2>
-
+<h3>
 📜 This project is licensed under the <strong>MIT License</strong>.
-
 <div align="center"> <h3>💙 Built with passion using React & Firebase</h3>
 
 ⭐ <strong>If you like this project, give it a star!</strong> ⭐
